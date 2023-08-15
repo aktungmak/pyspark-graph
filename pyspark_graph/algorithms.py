@@ -7,9 +7,8 @@ from pyspark.sql.functions import col, array_intersect, array_union, least, arra
     lit
 from pyspark.sql.types import StructType, StructField, LongType, ArrayType
 
-from graph import Graph, ID, ADJ, SRC, EDGE_ID, DST
-from pyspark_graph import util
-from util import match_structure, order_edges, multiple_union
+from .graph import Graph, ID, ADJ, SRC, EDGE_ID, DST
+from .util import match_structure, order_edges, multiple_union, ne_null_safe
 
 
 class Algorithm:
@@ -146,6 +145,9 @@ class AggregateMessages(Algorithm):
 
 class Pregel(Algorithm):
     """
+    Differeces to Pregel:
+    - Graph structure cannot be changed during execution
+    - Edges do not have any state
     initial_msg: will be sent to all vertices before the iteration starts, can use all vertex columns
     update_expr: executed at the start of each iteration to update state, can use all vertex columns plus MSG
     agg_expr: an expression on Pregel.MSG to aggregate all messages arriving at a vertex
@@ -162,12 +164,12 @@ class Pregel(Algorithm):
                  initial_msg: Column,
                  update_expr: Column,
                  agg_expr: Column,
-                 changed: typing.Callable = operator.ne,
+                 changed: typing.Callable = ne_null_safe,
                  msg_to_src: Column = None,
                  msg_to_dst: Column = None,
                  max_iterations: int = 100,
                  checkpoint_interval: int = 5):
-        if not (msg_to_src or msg_to_dst):
+        if msg_to_src is None and msg_to_dst is None:
             raise ValueError("need at least one of msg_to_src or msg_to_dst")
         if max_iterations <= 0:
             raise ValueError("max_iterations must be greater than 0")
@@ -183,13 +185,14 @@ class Pregel(Algorithm):
         self.checkpoint_interval = checkpoint_interval
 
     def run(self, g: Graph) -> DataFrame:
-        v = g.vertices.select(self.initial_msg.alias(self.MSG),
+        v = g.vertices.select(col(ID),
+                              self.initial_msg.alias(self.MSG),
                               lit(None).alias(self.STATE),
                               lit(None).alias(self.OLD_STATE))
         for i in range(self.max_iterations):
             # update vertex state
-            updated = v.filter(col(self.MSG).isNotNull) \
-                .withColumnRenamed(self.STATE, self.OLD_STATE) \
+            updated = v.filter(col(self.MSG).isNotNull()) \
+                .withColumn(self.OLD_STATE, col(self.STATE)) \
                 .withColumn(self.STATE, self.update_expr)
 
             # merge updated state back in to v
@@ -198,37 +201,36 @@ class Pregel(Algorithm):
 
             # check for termination
             changed = updated.filter(self.comparison(col(self.STATE), col(self.OLD_STATE)))
-            if changed.isEmpty():
+            if i > 0 and changed.isEmpty():
                 break
 
             # send msgs
-            # TODO send to src
             messages = []
-            if self.msg_to_src:
+            if self.msg_to_src is not None:
                 messages.append(self._send(changed, g.edges, v, self.msg_to_src))
-            if self.msg_to_dst:
+            if self.msg_to_dst is not None:
                 messages.append(self._send(changed, g.edges, v, self.msg_to_dst))
             messages = multiple_union(messages)
 
             # aggregate messages
             agg_messages = messages.groupBy(messages[ID]).agg(self.agg_expr.alias(self.MSG))
+            agg_messages.show()
 
             # left outer join original vs with messages, leaving nulls where there are no messages
             v = v.drop(self.MSG).join(agg_messages, ID, "left")
 
-            if self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
+            if g._checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
                 v = v.checkpoint()
         else:
             print("max_iterations reached")
         print(f"pregel terminated after {i} iterations")
         return v
 
+
     def _send(self, changed_vertices: DataFrame, edges: DataFrame, all_vertices: DataFrame, msg_expr: Column):
-        if msg_expr is None:
-            return None
         return changed_vertices \
             .select(col(ID).alias(SRC),
                     msg_expr.alias(self.MSG)) \
             .join(edges) \
-            .join(all_vertices, all_vertices[ID] == edges[DST]) \
+            .join(all_vertices.drop(self.MSG), all_vertices[ID] == edges[DST]) \
             .select(col(DST).alias(ID), col(self.MSG))

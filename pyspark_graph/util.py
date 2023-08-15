@@ -1,6 +1,6 @@
 from functools import reduce
 
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, Column
 from pyspark.sql.functions import col, least, greatest
 
 from .graph import SRC, DST
@@ -19,6 +19,10 @@ def multiple_union(dfs: list[DataFrame]) -> DataFrame:
         return left.union(right)
 
     return reduce(union, dfs)
+
+
+def ne_null_safe(x: Column, y: Column) -> Column:
+    return ~x.eqNullSafe(y)
 
 
 def match_structure(edges: DataFrame, match: list[tuple[str, str]]):
