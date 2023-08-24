@@ -94,15 +94,15 @@ class Graph:
         return adjacency
 
     @property
-    def out_degrees(self):
+    def out_degrees(self) -> DataFrame:
         return self._e.groupBy(F.col(SRC).alias(ID)).agg(F.count("*").alias("outDegree"))
 
     @property
-    def in_degrees(self):
+    def in_degrees(self) -> DataFrame:
         return self._e.groupBy(F.col(DST).alias(ID)).agg(F.count("*").alias("inDegree"))
 
     @property
-    def degrees(self):
+    def degrees(self) -> DataFrame:
         return self.adjacency.select(F.col(ID), F.size(F.col(ADJ)))
 
     def triplets(self, src_vertex_prefix: str, dst_vertex_prefix: str) -> DataFrame:
@@ -111,4 +111,3 @@ class Graph:
         return self._e \
             .join(src_vertices, self._e[SRC] == src_vertices[src_vertex_prefix + ID]) \
             .join(dst_vertices, self._e[DST] == dst_vertices[dst_vertex_prefix + ID])
-
