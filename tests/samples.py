@@ -17,3 +17,11 @@ def sample2(spark: SparkSession):
         [("a", "b", 9), ("b", "c", 9), ("c", "a", 9), ("c", "d", 9), ("d", "e", 9), ("e", "f", 9)],
         [SRC, DST, "nine"])
     return Graph(v, e)
+
+
+def two_components(spark: SparkSession):
+    v = spark.createDataFrame([(x,) for x in "abcd"], [ID])
+    e = spark.createDataFrame(
+        [("a", "b", 9), ("b", "c", 9), ("c", "a", 9), ("d", "e", 9), ("d", "f", 9)],
+        [SRC, DST, "nine"])
+    return Graph(v, e)
