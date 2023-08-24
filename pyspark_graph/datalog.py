@@ -3,17 +3,21 @@ from typing import Optional, Union
 from pyspark.sql import Column, DataFrame
 from pyspark.sql.functions import lit
 
-from graph import Graph, ID, SRC, DST
-from util import multiple_join
+from .graph import Graph, ID, SRC, DST
+from .util import multiple_join
 
 
 class Vertex:
-    def __init__(self, name: str, condition: Column | str):
+    def __init__(self, name: str, condition: Optional[Column | str] = None, **bindings):
         self.name = name
-        self.condition = condition
+        self.condition = condition if condition is not None else lit(True)
+        self.bindings = bindings
 
     def apply(self, g: Graph) -> DataFrame:
-        return g.vertices.filter(self.condition).withColumnRenamed(ID, self.name)
+        return g.vertices \
+            .filter(self.condition) \
+            .withColumnRenamed(ID, self.name) \
+            .withColumnsRenamed(self.bindings)
 
 
 class Edge:
@@ -23,14 +27,18 @@ class Edge:
         self.condition = condition if condition is not None else lit(True)
 
     def apply(self, g: Graph) -> DataFrame:
-        return g.edges.filter(self.condition).withColumnsRenamed({SRC: self.src, DST: self.dst})
+        return g.edges\
+            .filter(self.condition)\
+            .withColumnsRenamed({SRC: self.src, DST: self.dst})
 
 
 Rule = Union[Vertex | Edge]
 
 
 class DatalogQuery:
-    def __init__(self, projection: list[Column | str] = [], premises: list[Rule] = [],
+    def __init__(self,
+                 projection: list[Column | str] = [],
+                 premises: list[Rule] = [],
                  negated_premises: Optional[list[Rule]] = None):
         self._projection = projection
         self._premises = premises
@@ -42,8 +50,9 @@ class DatalogQuery:
         pos_dfs = [premise.apply(g) for premise in self._premises]
         pos_df = multiple_join(pos_dfs)
         if self._negated_premises is None:
-            return pos_df
+            result = pos_df
         else:
             neg_dfs = [premise.apply(g) for premise in self._negated_premises]
             neg_df = multiple_join(neg_dfs)
-            return pos_df.join(neg_df, how="anti").select(self._projection)
+            result = pos_df.join(neg_df, how="anti")
+        return result.select(self._projection)
