@@ -1,13 +1,12 @@
-import operator
 import typing
 from typing import Optional
 
 from pyspark.sql import DataFrame, Column
 from pyspark.sql.functions import col, array_intersect, array_union, least, array, array_contains, array_append, size, \
-    lit
+    min as _min, mode, hash as _hash, collect_set, sha1, array_join, lit
 from pyspark.sql.types import StructType, StructField, LongType, ArrayType
 
-from .graph import Graph, ID, ADJ, SRC, EDGE_ID, DST
+from .graph import Graph, ID, ADJ, SRC, EDGE_ID, DST, DEGREE
 from .util import match_structure, order_edges, multiple_union, ne_null_safe
 
 
@@ -148,7 +147,7 @@ class Pregel(Algorithm):
     Differeces to Pregel:
     - Graph structure cannot be changed during execution
     - Edges do not have any state
-    initial_msg: will be sent to all vertices before the iteration starts, can use all vertex columns
+    initial_state: the initial state of the vertex before iteration starts, can use all vertex columns
     update_expr: executed at the start of each iteration to update state, can use all vertex columns plus MSG
     agg_expr: an expression on Pregel.MSG to aggregate all messages arriving at a vertex
     changed: a function that takes the old and new state and returns True if the state changed
@@ -161,10 +160,10 @@ class Pregel(Algorithm):
     MSG = "message"  # column containing aggregated messages
 
     def __init__(self,
-                 initial_msg: Column,
-                 update_expr: Column,
+                 initial_state: Column,
                  agg_expr: Column,
-                 changed: typing.Callable = ne_null_safe,
+                 comparison: typing.Callable = ne_null_safe,
+                 update_expr: Column = None,
                  msg_to_src: Column = None,
                  msg_to_dst: Column = None,
                  max_iterations: int = 100,
@@ -175,62 +174,158 @@ class Pregel(Algorithm):
             raise ValueError("max_iterations must be greater than 0")
         if checkpoint_interval <= 0:
             raise ValueError("checkpoint_interval must be greater than 0")
-        self.initial_msg = initial_msg
-        self.update_expr = update_expr
+        self.initial_state = initial_state
         self.agg_expr = agg_expr
-        self.comparison = changed
+        self.comparison = comparison
+        self.update_expr = col(self.MSG) if update_expr is None else update_expr
         self.msg_to_src = msg_to_src
         self.msg_to_dst = msg_to_dst
         self.max_iterations = max_iterations
         self.checkpoint_interval = checkpoint_interval
 
     def run(self, g: Graph) -> DataFrame:
-        v = g.vertices.select(col(ID),
-                              self.initial_msg.alias(self.MSG),
-                              lit(None).alias(self.STATE),
-                              lit(None).alias(self.OLD_STATE))
+        state = g.vertices.withColumn(self.STATE, self.initial_state).withColumn(self.OLD_STATE, lit(None))
+        changed = state
         for i in range(self.max_iterations):
-            # update vertex state
-            updated = v.filter(col(self.MSG).isNotNull()) \
-                .withColumn(self.OLD_STATE, col(self.STATE)) \
-                .withColumn(self.STATE, self.update_expr)
+            # send msgs
+            message_dfs = []
+            if self.msg_to_src is not None:
+                message_dfs.append(self._send(changed, g.edges, self.msg_to_src, DST, SRC))
+            if self.msg_to_dst is not None:
+                message_dfs.append(self._send(changed, g.edges, self.msg_to_dst, SRC, DST))
+            print(message_dfs)
+            messages = multiple_union(message_dfs)
+            print("messages")
+            messages.show()
 
-            # merge updated state back in to v
-            not_updated = v.join(updated, ID, "anti")
-            v = updated.union(not_updated)
+            # aggregate messages
+            messages = messages.groupBy(ID).agg(self.agg_expr.alias(self.MSG))
+            print("agg_messages")
+            messages.show()
+
+            # update vertex state
+            updated = messages.join(state, ID) \
+                .withColumn(self.OLD_STATE, col(self.STATE)) \
+                .withColumn(self.STATE, self.update_expr) \
+                .drop(self.MSG)
+            not_updated = state.join(messages, ID, "anti")
+            state = updated.union(not_updated)
+            print("updated")
+            updated.show()
 
             # check for termination
             changed = updated.filter(self.comparison(col(self.STATE), col(self.OLD_STATE)))
-            if i > 0 and changed.isEmpty():
+            if changed.isEmpty():
                 break
+            print("changed")
+            changed.show()
 
-            # send msgs
-            messages = []
-            if self.msg_to_src is not None:
-                messages.append(self._send(changed, g.edges, v, self.msg_to_src))
-            if self.msg_to_dst is not None:
-                messages.append(self._send(changed, g.edges, v, self.msg_to_dst))
-            messages = multiple_union(messages)
-
-            # aggregate messages
-            agg_messages = messages.groupBy(messages[ID]).agg(self.agg_expr.alias(self.MSG))
-            agg_messages.show()
-
-            # left outer join original vs with messages, leaving nulls where there are no messages
-            v = v.drop(self.MSG).join(agg_messages, ID, "left")
-
-            if g._checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
-                v = v.checkpoint()
+            if g.checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
+                state = state.checkpoint()
         else:
             print("max_iterations reached")
         print(f"pregel terminated after {i} iterations")
+        # merge updated state back in to v
+        not_updated = v.join(updated, ID, "anti")
+        v = updated.union(not_updated)
         return v
 
-
-    def _send(self, changed_vertices: DataFrame, edges: DataFrame, all_vertices: DataFrame, msg_expr: Column):
+    def _send(self,
+              changed_vertices: DataFrame,
+              edges: DataFrame,
+              msg_expr: Column,
+              _from: str,
+              to: str) -> DataFrame:
+        """Take a dataframe of changed vertices, apply the send expression
+         and then join the result through the edge to the destination.
+         Result is a DataFrame of recipients and messages."""
         return changed_vertices \
-            .select(col(ID).alias(SRC),
+            .select(col(ID).alias(_from),
                     msg_expr.alias(self.MSG)) \
-            .join(edges) \
-            .join(all_vertices.drop(self.MSG), all_vertices[ID] == edges[DST]) \
-            .select(col(DST).alias(ID), col(self.MSG))
+            .join(edges, _from) \
+            .select(col(to).alias(ID), col(self.MSG))
+
+
+class ConnectedComponents(Algorithm):
+    """Identify connected components, disregarding edge direction"""
+    COMPONENT = "component"
+    ALGO_PREGEL = "pregel"
+    ALGO_ALTERNATING = "alternating"
+
+    def __init__(self, max_iterations=100):
+        self.max_iterations = max_iterations
+
+    def run(self, g: Graph, algo=ALGO_PREGEL):
+        if algo == self.ALGO_PREGEL:
+            return self._run_pregel(g)
+        elif algo == self.ALGO_ALTERNATING:
+            return self._run_alternating(g)
+        else:
+            raise ValueError(f"unknown connected components algorith {algo}")
+
+    def _run_pregel(self, g) -> DataFrame:
+        p = Pregel(initial_state=col(ID),
+                   agg_expr=_min(Pregel.MSG),
+                   msg_to_src=col(Pregel.STATE) if not g.directed else None,
+                   msg_to_dst=col(Pregel.STATE),
+                   max_iterations=self.max_iterations)
+        result = p.run(g)
+        return result.select(col(ID), col(Pregel.STATE).alias(self.COMPONENT))
+
+    def _run_alternating(self, g) -> DataFrame:
+        # normalise graph
+        ordered = order_edges(g)
+        # big star - connect all neighbours > v to smallest neighbour
+        nmin = self.neighbourhood_min(ordered)
+        bigstar = g.edges.join(nmin, SRC).select()
+
+        # small star - connect all neighbours <= v to smallest neighbour
+        # check for convergence - sum/mean-median all component assignments
+        raise NotImplementedError()
+
+    def neighbourhood_min(self, edges: DataFrame) -> DataFrame:
+        "minimum ID in each node's neighbourhood (including itself)"
+        return edges.groupBy(SRC) \
+            .agg(_min(DST).alias("min")) \
+            .select(col(SRC).alias(ID), least(SRC, "min"))
+
+
+class LabelPropagation(Algorithm):
+    LABEL = "label"
+
+    def __init__(self, max_iterations=100):
+        self.max_iterations = max_iterations
+
+    def run(self, g: Graph):
+        p = Pregel(initial_state=col(ID),
+                   agg_expr=mode(Pregel.MSG),
+                   msg_to_src=col(Pregel.STATE) if not g.directed else None,
+                   msg_to_dst=col(Pregel.STATE),
+                   max_iterations=self.max_iterations)
+        result = p.run(g)
+        return result.select(col(ID), col(Pregel.STATE).alias(self.COMPONENT))
+
+
+class WLKernel(Algorithm):
+    """Calculate the Weisfeiler-Lehman kernel for the graph
+    Returns a hash that will be the same for two isomorphic graphs.
+    By default the degree of the node will be used as the starting label,
+    but any vertex column can be used instead."""
+
+    def __init__(self, hashfunc=sha1, max_iterations=100):
+        self.hash = hashfunc
+        self.max_iterations = max_iterations
+
+    def run(self, g: Graph, label=None) -> str:
+        if label is None:
+            vertices = g.vertices.join(g.degrees, ID)
+            # TODO find a good way to update the graph
+            g = Graph(vertices, g.edges)
+            label = DEGREE
+        p = Pregel(initial_state=col(label),
+                   agg_expr=self.hash(array_join(collect_set(Pregel.MSG), "")),
+                   msg_to_src=col(Pregel.STATE) if not g.directed else None,
+                   msg_to_dst=col(Pregel.STATE),
+                   max_iterations=self.max_iterations)
+        result = p.run(g)
+        return result.agg(_hash(collect_set(Pregel.STATE))).first()[0]
