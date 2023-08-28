@@ -13,7 +13,9 @@ ADJ = "adjacent"
 OLD_SRC = "old_src"
 OLD_DST = "old_dst"
 OLD_ID = "old_id"
-
+DEGREE = "degree"
+IN_DEGREE = "in_degree"
+OUT_DEGREE = "out_degree"
 
 class Graph:
     def __init__(self,
@@ -95,15 +97,18 @@ class Graph:
 
     @property
     def out_degrees(self) -> DataFrame:
-        return self._e.groupBy(F.col(SRC).alias(ID)).agg(F.count("*").alias("outDegree"))
+        return self._e.groupBy(F.col(SRC).alias(ID)).agg(F.count("*").alias(OUT_DEGREE))
 
     @property
     def in_degrees(self) -> DataFrame:
-        return self._e.groupBy(F.col(DST).alias(ID)).agg(F.count("*").alias("inDegree"))
+        return self._e.groupBy(F.col(DST).alias(ID)).agg(F.count("*").alias(IN_DEGREE))
 
     @property
     def degrees(self) -> DataFrame:
-        return self.adjacency.select(F.col(ID), F.size(F.col(ADJ)))
+        if self._directed:
+            return self.out_degrees.withColumnRenamed(OUT_DEGREE, DEGREE)
+        else:
+            return self.adjacency.select(F.col(ID), F.size(F.col(ADJ)).alias(DEGREE))
 
     def triplets(self, src_vertex_prefix: str, dst_vertex_prefix: str) -> DataFrame:
         src_vertices = self._v.toDF(*[src_vertex_prefix + c for c in g.vertices.columns])
@@ -111,3 +116,7 @@ class Graph:
         return self._e \
             .join(src_vertices, self._e[SRC] == src_vertices[src_vertex_prefix + ID]) \
             .join(dst_vertices, self._e[DST] == dst_vertices[dst_vertex_prefix + ID])
+
+    @property
+    def checkpointing(self):
+        return self._checkpointing
