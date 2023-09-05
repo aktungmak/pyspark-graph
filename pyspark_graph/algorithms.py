@@ -3,7 +3,7 @@ from typing import Optional
 
 from pyspark.sql import DataFrame, Column
 from pyspark.sql.functions import col, array_intersect, array_union, least, array, array_contains, array_append, size, \
-    min as _min, mode, hash as _hash, collect_set, sha1, array_join, lit
+    min as _min, mode, sha1, array_join, lit, collect_list
 from pyspark.sql.types import StructType, StructField, LongType, ArrayType
 
 from .graph import Graph, ID, ADJ, SRC, EDGE_ID, DST, DEGREE
@@ -147,9 +147,6 @@ class AggregateMessages(Algorithm):
 
 class Pregel(Algorithm):
     """
-    Differeces to Pregel:
-    - Graph structure cannot be changed during execution
-    - Edges do not have any state
     initial_state: the initial state of the vertex before iteration starts, can use all vertex columns
     update_expr: executed at the start of each iteration to update state, can use all vertex columns plus MSG
     agg_expr: an expression on Pregel.MSG to aggregate all messages arriving at a vertex
@@ -218,9 +215,7 @@ class Pregel(Algorithm):
 
             if g.checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
                 state = state.checkpoint()
-        else:
-            print("max_iterations reached")
-        print(f"pregel terminated after {i} iteration{'s' if i > 1 else ''}")
+
         return state
 
     def _send(self,
@@ -245,7 +240,7 @@ class ConnectedComponents(Algorithm):
     ALGO_PREGEL = "pregel"
     ALGO_ALTERNATING = "alternating"
 
-    def __init__(self, max_iterations=100):
+    def __init__(self, max_iterations=10):
         self.max_iterations = max_iterations
 
     def run(self, g: Graph, algo=ALGO_PREGEL):
@@ -261,6 +256,7 @@ class ConnectedComponents(Algorithm):
                    agg_expr=_min(Pregel.MSG),
                    msg_to_src=col(Pregel.STATE) if not g.directed else None,
                    msg_to_dst=col(Pregel.STATE),
+                   update_expr=least(Pregel.MSG, Pregel.STATE),
                    max_iterations=self.max_iterations)
         result = p.run(g)
         return result.select(col(ID), col(Pregel.STATE).alias(self.COMPONENT))
@@ -276,7 +272,7 @@ class ConnectedComponents(Algorithm):
         # check for convergence - sum/mean-median all component assignments
         raise NotImplementedError()
 
-    def neighbourhood_min(self, edges: DataFrame) -> DataFrame:
+    def _neighbourhood_min(self, edges: DataFrame) -> DataFrame:
         "minimum ID in each node's neighbourhood (including itself)"
         return edges.groupBy(SRC) \
             .agg(_min(DST).alias("min")) \
@@ -286,39 +282,41 @@ class ConnectedComponents(Algorithm):
 class LabelPropagation(Algorithm):
     LABEL = "label"
 
-    def __init__(self, max_iterations=100):
+    def __init__(self, max_iterations=10):
         self.max_iterations = max_iterations
 
     def run(self, g: Graph):
         p = Pregel(initial_state=col(ID),
                    agg_expr=mode(Pregel.MSG),
-                   msg_to_src=col(Pregel.STATE) if not g.directed else None,
+                   msg_to_src=None if g.directed else col(Pregel.STATE),
                    msg_to_dst=col(Pregel.STATE),
                    max_iterations=self.max_iterations)
         result = p.run(g)
-        return result.select(col(ID), col(Pregel.STATE).alias(self.COMPONENT))
+        return result.select(col(ID), col(Pregel.STATE).alias(self.LABEL))
 
 
 class WLKernel(Algorithm):
     """Calculate the Weisfeiler-Lehman kernel for the graph
     Returns a hash that will be the same for two isomorphic graphs.
-    By default the degree of the node will be used as the starting label,
+    By default, the degree of the node will be used as the starting label,
     but any vertex column can be used instead."""
 
-    def __init__(self, hashfunc=sha1, max_iterations=100):
+    def __init__(self, hashfunc=sha1, label_column: str = None, max_iterations=3):
         self.hash = hashfunc
+        self.label_column = label_column
         self.max_iterations = max_iterations
 
-    def run(self, g: Graph, label=None) -> str:
+    def run(self, g: Graph) -> str:
+        label = self.label_column
         if label is None:
             vertices = g.vertices.join(g.degrees, ID)
             # TODO find a good way to update the graph
-            g = Graph(vertices, g.edges)
+            g = Graph(vertices, g.edges, indexed=True)
             label = DEGREE
         p = Pregel(initial_state=col(label),
-                   agg_expr=self.hash(array_join(collect_set(Pregel.MSG), "")),
+                   agg_expr=self.hash(array_join(collect_list(Pregel.MSG), "")),
                    msg_to_src=None if g.directed else col(Pregel.STATE),
                    msg_to_dst=col(Pregel.STATE),
                    max_iterations=self.max_iterations)
         result = p.run(g)
-        return result.agg(_hash(collect_set(Pregel.STATE))).first()[0]
+        return result.agg(self.hash(array_join(collect_list(Pregel.STATE), ""))).first()[0]
