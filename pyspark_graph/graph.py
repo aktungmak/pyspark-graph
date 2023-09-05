@@ -1,9 +1,8 @@
 from functools import cached_property
 from typing import Optional
 
-import pyspark.sql
 from pyspark.sql import SparkSession, DataFrame
-import pyspark.sql.functions as F
+from pyspark.sql.functions import monotonically_increasing_id, col, collect_set, array, count, size
 
 SRC = "src"
 DST = "dst"
@@ -16,6 +15,7 @@ OLD_ID = "old_id"
 DEGREE = "degree"
 IN_DEGREE = "in_degree"
 OUT_DEGREE = "out_degree"
+
 
 class Graph:
     def __init__(self,
@@ -53,14 +53,14 @@ class Graph:
         # TODO repartition and/or sort within partitions?
         v = self._v.distinct() \
             .withColumnRenamed(ID, OLD_ID) \
-            .withColumn(ID, F.monotonically_increasing_id())
+            .withColumn(ID, monotonically_increasing_id())
 
         e = self._e.distinct() \
             .withColumnsRenamed({SRC: OLD_SRC, DST: OLD_DST})
         e = e.join(v.withColumnRenamed(ID, SRC), e[OLD_SRC] == v[OLD_ID]) \
             .drop(OLD_ID) \
             .join(v.withColumnRenamed(ID, DST), e[OLD_DST] == v[OLD_ID]) \
-            .select(F.monotonically_increasing_id().alias(EDGE_ID), SRC, DST, e["*"])
+            .select(monotonically_increasing_id().alias(EDGE_ID), SRC, DST, e["*"])
 
         if self._checkpointing:
             v = v.checkpoint()
@@ -84,12 +84,12 @@ class Graph:
 
     @cached_property
     def adjacency(self) -> DataFrame:
-        connected = self._e.select(F.col(SRC), F.col(DST))
+        connected = self._e.select(col(SRC), col(DST))
         if not self._directed:
-            reverse_edges = self._e.select(F.col(SRC).alias(DST), F.col(DST).alias(SRC))
-            connected = connected.union(reverse_edges)
-        grouped = connected.groupBy(F.col(SRC).alias(ID)).agg(F.collect_list(DST).alias(ADJ))
-        isolated = self._v.select(F.col(ID), F.array().alias(ADJ)).join(grouped, ID, "anti")
+            reverse = self._e.withColumns({SRC: DST, DST: SRC})
+            connected = connected.union(reverse)
+        grouped = connected.groupBy(col(SRC).alias(ID)).agg(collect_set(DST).alias(ADJ))
+        isolated = self._v.select(col(ID), array().alias(ADJ)).join(grouped, ID, "anti")
         adjacency = grouped.union(isolated)
         if self._checkpointing():
             adjacency = adjacency.checkpoint()
@@ -97,22 +97,22 @@ class Graph:
 
     @property
     def out_degrees(self) -> DataFrame:
-        return self._e.groupBy(F.col(SRC).alias(ID)).agg(F.count("*").alias(OUT_DEGREE))
+        return self._e.groupBy(col(SRC).alias(ID)).agg(count("*").alias(OUT_DEGREE))
 
     @property
     def in_degrees(self) -> DataFrame:
-        return self._e.groupBy(F.col(DST).alias(ID)).agg(F.count("*").alias(IN_DEGREE))
+        return self._e.groupBy(col(DST).alias(ID)).agg(count("*").alias(IN_DEGREE))
 
     @property
     def degrees(self) -> DataFrame:
         if self._directed:
             return self.out_degrees.withColumnRenamed(OUT_DEGREE, DEGREE)
         else:
-            return self.adjacency.select(F.col(ID), F.size(F.col(ADJ)).alias(DEGREE))
+            return self.adjacency.select(col(ID), size(col(ADJ)).alias(DEGREE))
 
     def triplets(self, src_vertex_prefix: str, dst_vertex_prefix: str) -> DataFrame:
-        src_vertices = self._v.toDF(*[src_vertex_prefix + c for c in g.vertices.columns])
-        dst_vertices = self._v.toDF(*[dst_vertex_prefix + c for c in g.vertices.columns])
+        src_vertices = self._v.toDF(*[src_vertex_prefix + c for c in self._v.columns])
+        dst_vertices = self._v.toDF(*[dst_vertex_prefix + c for c in self._v.columns])
         return self._e \
             .join(src_vertices, self._e[SRC] == src_vertices[src_vertex_prefix + ID]) \
             .join(dst_vertices, self._e[DST] == dst_vertices[dst_vertex_prefix + ID])
