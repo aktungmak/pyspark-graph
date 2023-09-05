@@ -282,11 +282,12 @@ class ConnectedComponents(Algorithm):
 class LabelPropagation(Algorithm):
     LABEL = "label"
 
-    def __init__(self, max_iterations=10):
+    def __init__(self, label_column: str = None, max_iterations=10):
+        self.label_column = label_column
         self.max_iterations = max_iterations
 
     def run(self, g: Graph):
-        p = Pregel(initial_state=col(ID),
+        p = Pregel(initial_state=col(ID) if self.label_column is None else col(self.label_column),
                    agg_expr=mode(Pregel.MSG),
                    msg_to_src=None if g.directed else col(Pregel.STATE),
                    msg_to_dst=col(Pregel.STATE),
