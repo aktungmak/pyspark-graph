@@ -71,7 +71,7 @@ class BreadthFirstSearch(Algorithm):
         if g.directed:
             edges = g.edges
         else:
-            reverse = g.edges.withColumnsRenamed({SRC: DST, DST: SRC})
+            reverse = g.edges.withColumns({SRC: DST, DST: SRC})
             edges = g.edges.union(reverse).distinct()
 
         start = g.vertices.filter(self.start_expr)
