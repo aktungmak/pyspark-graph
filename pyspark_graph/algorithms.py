@@ -162,12 +162,12 @@ class Pregel(Algorithm):
     def __init__(self,
                  initial_state: Column,
                  agg_expr: Column,
-                 comparison: typing.Callable = ne_null_safe,
-                 update_expr: Column = None,
                  msg_to_src: Column = None,
                  msg_to_dst: Column = None,
-                 max_iterations: int = 100,
-                 checkpoint_interval: int = 5):
+                 update_expr: Column = None,
+                 comparison: typing.Callable = ne_null_safe,
+                 max_iterations: int = 10,
+                 checkpoint_interval: int = 2):
         if msg_to_src is None and msg_to_dst is None:
             raise ValueError("need at least one of msg_to_src or msg_to_dst")
         if max_iterations <= 0:
@@ -176,15 +176,16 @@ class Pregel(Algorithm):
             raise ValueError("checkpoint_interval must be greater than 0")
         self.initial_state = initial_state
         self.agg_expr = agg_expr
-        self.comparison = comparison
-        self.update_expr = col(self.MSG) if update_expr is None else update_expr
         self.msg_to_src = msg_to_src
         self.msg_to_dst = msg_to_dst
+        self.update_expr = col(self.MSG) if update_expr is None else update_expr
+        self.comparison = comparison
         self.max_iterations = max_iterations
         self.checkpoint_interval = checkpoint_interval
 
     def run(self, g: Graph) -> DataFrame:
-        state = g.vertices.withColumn(self.STATE, self.initial_state).withColumn(self.OLD_STATE, lit(None))
+        state = g.vertices.withColumns({self.STATE: self.initial_state,
+                                        self.OLD_STATE: lit(None)})
         changed = state
         for i in range(self.max_iterations):
             # send msgs
@@ -193,42 +194,31 @@ class Pregel(Algorithm):
                 message_dfs.append(self._send(changed, g.edges, self.msg_to_src, DST, SRC))
             if self.msg_to_dst is not None:
                 message_dfs.append(self._send(changed, g.edges, self.msg_to_dst, SRC, DST))
-            print(message_dfs)
             messages = multiple_union(message_dfs)
-            print("messages")
-            messages.show()
 
             # aggregate messages
-            messages = messages.groupBy(ID).agg(self.agg_expr.alias(self.MSG))
-            print("agg_messages")
-            messages.show()
+            agg_messages = messages.groupBy(ID).agg(self.agg_expr.alias(self.MSG))
 
             # update vertex state
-            updated = messages.join(state, ID) \
-                .withColumn(self.OLD_STATE, col(self.STATE)) \
-                .withColumn(self.STATE, self.update_expr) \
+            updated = agg_messages.join(state, ID) \
+                .withColumns({self.OLD_STATE: col(self.STATE),
+                              self.STATE: self.update_expr}) \
                 .drop(self.MSG)
+            # DataFrame does not support insert so we use antijoin+union
             not_updated = state.join(messages, ID, "anti")
             state = updated.union(not_updated)
-            print("updated")
-            updated.show()
 
             # check for termination
             changed = updated.filter(self.comparison(col(self.STATE), col(self.OLD_STATE)))
             if changed.isEmpty():
                 break
-            print("changed")
-            changed.show()
 
             if g.checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
                 state = state.checkpoint()
         else:
             print("max_iterations reached")
-        print(f"pregel terminated after {i} iterations")
-        # merge updated state back in to v
-        not_updated = v.join(updated, ID, "anti")
-        v = updated.union(not_updated)
-        return v
+        print(f"pregel terminated after {i} iteration{'s' if i > 1 else ''}")
+        return state
 
     def _send(self,
               changed_vertices: DataFrame,
@@ -324,7 +314,7 @@ class WLKernel(Algorithm):
             label = DEGREE
         p = Pregel(initial_state=col(label),
                    agg_expr=self.hash(array_join(collect_set(Pregel.MSG), "")),
-                   msg_to_src=col(Pregel.STATE) if not g.directed else None,
+                   msg_to_src=None if g.directed else col(Pregel.STATE),
                    msg_to_dst=col(Pregel.STATE),
                    max_iterations=self.max_iterations)
         result = p.run(g)
