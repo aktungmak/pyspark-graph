@@ -50,7 +50,7 @@ class BreadthFirstSearch(Algorithm):
     """
     Perform breadth-first search from a specified set of source vertices to a destination set of vertices,
     while optionally limiting the edges that can be traversed.
-    The search is performed iteratively and is by default limited to 100 iterations.
+    The search is performed iteratively and is by default limited to 10 iterations.
     Returns start, end and arrays of the edges and vertices traversed.
     """
     START = "start"
@@ -61,22 +61,25 @@ class BreadthFirstSearch(Algorithm):
                                 StructField(EDGES, ArrayType(LongType(), False), False),
                                 StructField(VERTICES, ArrayType(LongType(), False), False)])
 
-    def __init__(self, start_expr: Column, end_expr: Column, edge_expr: Column = "true", max_iterations: int = 100):
+    def __init__(self, start_expr: Column, end_expr: Column, edge_expr: Column = "true", max_iterations: int = 10):
         self.start_expr = start_expr
         self.end_expr = end_expr
         self.edge_expr = edge_expr
         self.max_iterations = max_iterations
 
     def run(self, g: Graph) -> DataFrame:
-        if not g.directed:
-            # TODO undirected version
-            raise NotImplementedError("BFS only implemented on directed graphs")
+        if g.directed:
+            edges = g.edges
+        else:
+            reverse = g.edges.withColumnsRenamed({SRC: DST, DST: SRC})
+            edges = g.edges.union(reverse).distinct()
+
         start = g.vertices.filter(self.start_expr)
         end = g.vertices.filter(self.end_expr)
-        edges = g.edges.filter(self.edge_expr)
+        edges = edges.filter(self.edge_expr)
+
         # check for trivial empty result
         if start.isEmpty() or edges.isEmpty() or end.isEmpty():
-            print("no match for start, end or edges expressions")
             return g.spark.createDataFrame([], self.result_schema)
 
         horizon = "horizon"
