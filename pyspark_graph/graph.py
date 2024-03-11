@@ -24,11 +24,12 @@ class Graph:
                  indexed: bool = False,
                  spark: Optional[SparkSession] = None):
         f"""
-        Create a new Graph from vertices and edges or an adjacency list 
+        Create a new Graph from vertices and edges
         :param vertices: DataFrame with a column "{ID}" plus any user attributes
         :param edges: Dataframe with columns "{SRC}" and "{DST}" plus any user attributes
         :param directed: Should the graph be treated as if it is directed?
         :param indexed: Does the graph already have distinct edges indexed with LONG keys?
+        :param spark: Provide a specific SparkSession object to use
         """
         self._v = vertices
         self._e = edges
@@ -84,6 +85,9 @@ class Graph:
 
     @cached_property
     def adjacency(self) -> DataFrame:
+        """
+        :return: A dataframe containing the adjacency list representation of the graph
+        """
         connected = self._e.select(col(SRC), col(DST))
         if not self._directed:
             reverse = self._e.withColumns({SRC: DST, DST: SRC})
@@ -91,7 +95,7 @@ class Graph:
         grouped = connected.groupBy(col(SRC).alias(ID)).agg(collect_set(DST).alias(ADJ))
         isolated = self._v.select(col(ID), array().alias(ADJ)).join(grouped, ID, "anti")
         adjacency = grouped.union(isolated)
-        if self._checkpointing():
+        if self._checkpointing:
             adjacency = adjacency.checkpoint()
         return adjacency
 
@@ -111,6 +115,13 @@ class Graph:
             return self.adjacency.select(col(ID), size(col(ADJ)).alias(DEGREE))
 
     def triplets(self, src_vertex_prefix: str, dst_vertex_prefix: str) -> DataFrame:
+        """
+        Build a dataframe that includes the source and destination vertex attributes
+        for each edge.
+        :param src_vertex_prefix: Prefix applied to the name of each column in the source vertex table
+        :param dst_vertex_prefix: Prefix applied to the name of each column in the destination vertex table
+        :return: A dataframe with one row per edge
+        """
         src_vertices = self._v.toDF(*[src_vertex_prefix + c for c in self._v.columns])
         dst_vertices = self._v.toDF(*[dst_vertex_prefix + c for c in self._v.columns])
         return self._e \
