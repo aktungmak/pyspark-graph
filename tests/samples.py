@@ -20,8 +20,16 @@ def sample2(spark: SparkSession):
 
 
 def two_components(spark: SparkSession):
-    v = spark.createDataFrame([(x,) for x in "abcd"], [ID])
+    v = spark.createDataFrame([(x,) for x in "abcdef"], [ID])
     e = spark.createDataFrame(
         [("a", "b", 9), ("b", "c", 9), ("c", "a", 9), ("d", "e", 9), ("d", "f", 9)],
         [SRC, DST, "nine"])
+    return Graph(v, e)
+
+
+def labelled(spark: SparkSession):
+    v = spark.createDataFrame([(x, i) for i, x in enumerate("abcdef")], [ID, "label"])
+    e = spark.createDataFrame(
+        [("a", "b"), ("b", "c"), ("c", "a"), ("d", "e"), ("d", "f")],
+        [SRC, DST])
     return Graph(v, e)
