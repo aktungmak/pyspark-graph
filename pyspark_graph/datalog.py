@@ -27,8 +27,8 @@ class Edge:
         self.condition = condition if condition is not None else lit(True)
 
     def apply(self, g: Graph) -> DataFrame:
-        return g.edges\
-            .filter(self.condition)\
+        return g.edges \
+            .filter(self.condition) \
             .withColumnsRenamed({SRC: self.src, DST: self.dst})
 
 
@@ -36,8 +36,18 @@ Rule = Union[Vertex | Edge]
 
 
 class DatalogQuery:
+    """
+    Query a graph using a datalog style query structure to do advanced
+    motif finding.
+    Each Vertex and Edge object defines a subset of the vertices and edges
+    in the graph. Additionally, the attributes are labelled with names
+    that are used to join together the result.
+    By providing a set of negated premises, you can eliminate them from the
+    result set.
+    """
+
     def __init__(self,
-                 projection: list[Column | str] = [],
+                 projection: list[Column] = [],
                  premises: list[Rule] = [],
                  negated_premises: Optional[list[Rule]] = None):
         self._projection = projection
@@ -46,13 +56,11 @@ class DatalogQuery:
 
         # TODO validate range restriction property
 
-    def apply(self, g: Graph):
+    def apply(self, g: Graph) -> DataFrame:
         pos_dfs = [premise.apply(g) for premise in self._premises]
-        pos_df = multiple_join(pos_dfs)
-        if self._negated_premises is None:
-            result = pos_df
-        else:
+        result = multiple_join(pos_dfs)
+        if self._negated_premises is not None:
             neg_dfs = [premise.apply(g) for premise in self._negated_premises]
             neg_df = multiple_join(neg_dfs)
-            result = pos_df.join(neg_df, how="anti")
+            result = result.join(neg_df, how="anti")
         return result.select(self._projection)
