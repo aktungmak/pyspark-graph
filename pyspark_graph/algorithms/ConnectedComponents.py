@@ -8,6 +8,13 @@ from pyspark_graph.algorithms.Pregel import Pregel
 from pyspark_graph.graph import Graph, ID, SRC, DST
 from pyspark_graph.util import order_edges
 
+COMPONENT = "component"
+ALGO_PREGEL = "pregel"
+ALGO_ALTERNATING = "alternating"
+ALGO_LAPLACIAN = "laplacian"
+
+
+# TODO implement laplacian algorithm
 
 class ConnectedComponents(Algorithm):
     """
@@ -16,61 +23,28 @@ class ConnectedComponents(Algorithm):
 
     :param max_iterations:
     """
-    COMPONENT = "component"
-    ALGO_PREGEL = "pregel"
-    ALGO_ALTERNATING = "alternating"
-    ALGO_LAPLACIAN = "laplacian"
 
     def __init__(self, max_iterations=10):
         self.max_iterations = max_iterations
 
-    def run(self, g: Graph, algo=ALGO_PREGEL):
-        if algo == self.ALGO_PREGEL:
-            return self._run_pregel(g)
-        elif algo == self.ALGO_ALTERNATING:
-            return self._run_alternating(g)
-        else:
-            raise ValueError(f"unknown connected components algorith {algo}")
-
-    def _run_pregel(self, g) -> DataFrame:
+    def run(self, g) -> DataFrame:
         p = Pregel(initial_state=col(ID),
                    agg_expr=_min(Pregel.MSG),
                    msg_to_src=col(Pregel.STATE) if not g.directed else None,
                    msg_to_dst=col(Pregel.STATE),
                    update_expr=least(Pregel.MSG, Pregel.STATE),
                    max_iterations=self.max_iterations)
-        result = p.run(g)
-        return result.select(col(ID), col(Pregel.STATE).alias(self.COMPONENT))
-
-    def _run_alternating(self, g) -> DataFrame:
-        # normalise graph
-        ordered = order_edges(g)
-        # big star - connect all neighbours > v to smallest neighbour
-        nmin = self.neighbourhood_min(ordered)
-        bigstar = g.edges.join(nmin, SRC).select()
-
-        # small star - connect all neighbours <= v to smallest neighbour
-        # check for convergence - sum/mean-median all component assignments
-        raise NotImplementedError()
-
-    def _neighbourhood_min(self, edges: DataFrame) -> DataFrame:
-        "minimum ID in each node's neighbourhood (including itself)"
-        return edges.groupBy(SRC) \
-            .agg(_min(DST).alias("min")) \
-            .select(col(SRC).alias(ID), least(SRC, "min"))
-
-    def _run_laplacian(self, g) -> DataFrame:
-        raise NotImplementedError()
+        return p.run(g).select(col(ID), col(Pregel.STATE).alias(COMPONENT))
 
 
 class BSSSConnectedComponents(Algorithm):
-    COMPONENT = "component"
     ORIG_ID = "orig_id"
     MIN_NBR = "min_nbr"
     CNT = "cnt"
     CHECKPOINT_NAME_PREFIX = "connected-components"
 
-    def __init__(self, broadcastThreshold: int = 1000000, checkpointInterval: int = 2, intermediateStorageLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK):
+    def __init__(self, broadcastThreshold: int = 1000000, checkpointInterval: int = 2,
+                 intermediateStorageLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK):
         self.broadcastThreshold = broadcastThreshold
         self.checkpointInterval = checkpointInterval
         self.intermediateStorageLevel = intermediateStorageLevel
@@ -107,7 +81,8 @@ class BSSSConnectedComponents(Algorithm):
                          count("*").alias(self.CNT)))
 
     def skewedJoin(self, edges: DataFrame, minNbrs: DataFrame):
-        hubs = minNbrs.filter(col(self.CNT) > self.broadcastThreshold).select(col(SRC).cast("long")).distinct().collect()
+        hubs = minNbrs.filter(col(self.CNT) > self.broadcastThreshold).select(
+            col(SRC).cast("long")).distinct().collect()
         return Graph.skewedJoin(edges, minNbrs, SRC, hubs, logPrefix)
 
     def run(self, graph: Graph):
@@ -145,8 +120,8 @@ class BSSSConnectedComponents(Algorithm):
 
             # connect all strictly larger neighbors to the min neighbor (including self)
             ee = self.skewedJoin(ee, minNbrs1).select(col(DST).alias(SRC),
-                                                                                          col(self.MIN_NBR).alias(
-                                                                                              DST)).distinct().persist(
+                                                      col(self.MIN_NBR).alias(
+                                                          DST)).distinct().persist(
                 self.intermediateStorageLevel)
 
             # small-star step #############################################################
@@ -185,4 +160,4 @@ class BSSSConnectedComponents(Algorithm):
         print(f"{logPrefix} Connected components converged in {iteration - 1} iterations.")
 
         return vv.join(ee, vv[ID] == ee[DST], "left_outer").select(
-            when(ee[SRC].isNull(), vv[ID]).otherwise(ee[SRC]).alias(self.COMPONENT))
+            when(ee[SRC].isNull(), vv[ID]).otherwise(ee[SRC]).alias(COMPONENT))
