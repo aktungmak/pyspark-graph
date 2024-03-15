@@ -5,6 +5,11 @@ from pyspark.sql.types import StructType, StructField, LongType, ArrayType
 from pyspark_graph.algorithms import Algorithm
 from pyspark_graph.graph import Graph, SRC, DST, ID, EDGE_ID
 
+START = "start"
+END = "end"
+EDGES = "edges"
+VERTICES = "vertices"
+
 
 class BreadthFirstSearch(Algorithm):
     """
@@ -13,10 +18,6 @@ class BreadthFirstSearch(Algorithm):
     The search is performed iteratively and is by default limited to 10 iterations.
     Returns start, end and arrays of the edges and vertices traversed.
     """
-    START = "start"
-    END = "end"
-    EDGES = "edges"
-    VERTICES = "vertices"
     result_schema = StructType([StructField(START, LongType(), False), StructField(END, LongType(), False),
                                 StructField(EDGES, ArrayType(LongType(), False), False),
                                 StructField(VERTICES, ArrayType(LongType(), False), False)])

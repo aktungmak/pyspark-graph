@@ -6,15 +6,15 @@ from pyspark.sql.functions import col
 from pyspark_graph.algorithms import Algorithm
 from pyspark_graph.graph import Graph, ID
 
+MSG = "message"
+SRC_VERTEX_PREFIX = "src_vertex_"
+DST_VERTEX_PREFIX = "dst_vertex_"
 
 class AggregateMessages(Algorithm):
     """
     Aggregate messages or something.
     Maybe remove given poor iterative performance in Spark
     """
-    MSG = "message"
-    SRC_VERTEX_PREFIX = "src_vertex_"
-    DST_VERTEX_PREFIX = "dst_vertex_"
 
     # result_schema = StructType([StructField(ID, LongType, False), StructField(MSG, Any, False)])
 

@@ -3,8 +3,9 @@ from pyspark.sql.functions import col, mode
 
 from pyspark_graph.algorithms import Algorithm
 from pyspark_graph.algorithms.Pregel import Pregel
-from pyspark_graph.graph import Graph, ID
+from pyspark_graph.graph import Graph, ID, OLD_ID
 
+LABEL = "label"
 
 class LabelPropagation(Algorithm):
     """
@@ -16,7 +17,8 @@ class LabelPropagation(Algorithm):
                          vertex ID is used instead.
     :param max_iterations: By default 10, may be less if the graph stage converges earler.
     """
-    LABEL = "label"
+    result_schema = StructType([StructField(ID, LongType(), False),
+                                StructField(LABEL, LongType(), False)])
 
     def __init__(self, label_column: Column = None, max_iterations=10):
         self.label_column = label_column
@@ -29,4 +31,4 @@ class LabelPropagation(Algorithm):
                    msg_to_dst=col(Pregel.STATE),
                    max_iterations=self.max_iterations)
         result = p.run(g)
-        return result.select(col(ID), col(Pregel.STATE).alias(self.LABEL))
+        return result.select(col(ID), col(Pregel.STATE).alias(LABEL))
