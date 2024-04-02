@@ -1,7 +1,7 @@
 from functools import cached_property
-from typing import Optional
+from typing import Optional, Self
 
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import SparkSession, DataFrame, Column
 from pyspark.sql.functions import monotonically_increasing_id, col, collect_set, array, count, size
 
 SRC = "src"
@@ -29,7 +29,7 @@ class Graph:
         :param edges: Dataframe with columns "{SRC}" and "{DST}" plus any user attributes
         :param directed: Should the graph be treated as if it is directed?
         :param indexed: Does the graph already have distinct edges indexed with LONG keys?
-        :param spark: Provide a specific SparkSession object to use
+        :param spark: Provide a specific SparkSession object to use, otherwise active session will be acquired
         """
         self._v = vertices
         self._e = edges
@@ -127,6 +127,17 @@ class Graph:
         return self._e \
             .join(src_vertices, self._e[SRC] == src_vertices[src_vertex_prefix + ID]) \
             .join(dst_vertices, self._e[DST] == dst_vertices[dst_vertex_prefix + ID])
+
+    def with_vertex_column(self, col_name: str, col: Column) -> Self:
+        """
+        Add a new column to all vertices.
+        :param col_name: The name of the new column
+        :param col: The Column expression that will generate the new value
+        :return: This Graph to support chaining
+        """
+        new_v = self._v.withColumn(col_name, col)
+        self._v = new_v
+        return self
 
     @property
     def checkpointing(self):
