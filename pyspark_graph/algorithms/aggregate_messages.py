@@ -10,13 +10,14 @@ MSG = "message"
 SRC_VERTEX_PREFIX = "src_vertex_"
 DST_VERTEX_PREFIX = "dst_vertex_"
 
+
 class AggregateMessages(Algorithm):
     """
-    Aggregate messages or something.
-    Maybe remove given poor iterative performance in Spark
+    Iteratively aggregate messages from vertex to vertex.
+    Maybe remove given poor iterative performance in Spark?
     """
 
-    # result_schema = StructType([StructField(ID, LongType, False), StructField(MSG, Any, False)])
+    result_schema = StructType([StructField(ID, LongType, False), StructField(MSG, Any, False)])
 
     def __init__(self, agg: Column, to_src: Optional[Column] = None, to_dst: Optional[Column] = None):
         if to_src is None and to_dst is None:

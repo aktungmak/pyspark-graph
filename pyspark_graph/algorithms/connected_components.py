@@ -4,7 +4,7 @@ from pyspark.sql.functions import col, min as _min, least, explode, array, struc
 from pyspark.sql.types import DecimalType
 
 from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.algorithms.Pregel import Pregel
+from pyspark_graph.algorithms.pregel import Pregel
 from pyspark_graph.graph import Graph, ID, SRC, DST
 from pyspark_graph.util import order_edges
 

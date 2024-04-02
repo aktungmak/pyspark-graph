@@ -1,7 +1,7 @@
 from pyspark.sql.functions import sha1, col, array_join, collect_list
 
 from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.algorithms.Pregel import Pregel
+from pyspark_graph.algorithms.pregel import Pregel
 from pyspark_graph.graph import Graph, ID, DEGREE
 
 

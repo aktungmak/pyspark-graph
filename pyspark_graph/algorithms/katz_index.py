@@ -9,9 +9,9 @@ from pyspark_graph.matrix import graph_to_adjacency_matrix
 
 class KatzIndex(Algorithm):
     """
+    TODO
     Calculate the Katz index of each pair of vertices, which represents the number
     of paths up to max_iterations long there are between pairs of vertices.
-
     """
     INDEX = "katz_index"
 
