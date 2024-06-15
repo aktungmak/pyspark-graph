@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Optional, Self
+from typing import Optional
 
 from pyspark.sql import SparkSession, DataFrame, Column
 from pyspark.sql.functions import monotonically_increasing_id, col, collect_set, array, count, size
@@ -22,7 +22,7 @@ class Graph:
                  vertices: DataFrame, edges: DataFrame,
                  directed: bool = True,
                  indexed: bool = False,
-                 spark: Optional[SparkSession] = None):
+                 spark_session: Optional[SparkSession] = None):
         f"""
         Create a new Graph from vertices and edges
         :param vertices: DataFrame with a column "{ID}" plus any user attributes
@@ -34,8 +34,7 @@ class Graph:
         self._v = vertices
         self._e = edges
         self._directed = directed
-        self.spark = spark if spark is not None else SparkSession.getActiveSession()
-        self._checkpointing = self.spark.sparkContext.getCheckpointDir() is not None
+        self.spark = spark_session or SparkSession.getActiveSession()
 
         if not indexed:
             self._index()
@@ -62,10 +61,6 @@ class Graph:
             .drop(OLD_ID) \
             .join(v.withColumnRenamed(ID, DST), e[OLD_DST] == v[OLD_ID]) \
             .select(monotonically_increasing_id().alias(EDGE_ID), SRC, DST, e["*"])
-
-        if self._checkpointing:
-            v = v.checkpoint()
-            e = e.checkpoint()
 
         self._v = v
         self._e = e
@@ -95,8 +90,6 @@ class Graph:
         grouped = connected.groupBy(col(SRC).alias(ID)).agg(collect_set(DST).alias(ADJ))
         isolated = self._v.select(col(ID), array().alias(ADJ)).join(grouped, ID, "anti")
         adjacency = grouped.union(isolated)
-        if self._checkpointing:
-            adjacency = adjacency.checkpoint()
         return adjacency
 
     @property
@@ -128,7 +121,7 @@ class Graph:
             .join(src_vertices, self._e[SRC] == src_vertices[src_vertex_prefix + ID]) \
             .join(dst_vertices, self._e[DST] == dst_vertices[dst_vertex_prefix + ID])
 
-    def with_vertex_column(self, col_name: str, col: Column) -> Self:
+    def with_vertex_column(self, col_name: str, col: Column):
         """
         Add a new column to all vertices.
         :param col_name: The name of the new column
@@ -138,7 +131,3 @@ class Graph:
         new_v = self._v.withColumn(col_name, col)
         self._v = new_v
         return self
-
-    @property
-    def checkpointing(self):
-        return self._checkpointing

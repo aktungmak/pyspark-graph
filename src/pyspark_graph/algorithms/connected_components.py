@@ -40,12 +40,10 @@ class BSSSConnectedComponents(Algorithm):
     ORIG_ID = "orig_id"
     MIN_NBR = "min_nbr"
     CNT = "cnt"
-    CHECKPOINT_NAME_PREFIX = "connected-components"
 
-    def __init__(self, broadcastThreshold: int = 1000000, checkpointInterval: int = 2,
+    def __init__(self, broadcastThreshold: int = 1000000,
                  intermediateStorageLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK):
         self.broadcastThreshold = broadcastThreshold
-        self.checkpointInterval = checkpointInterval
         self.intermediateStorageLevel = intermediateStorageLevel
 
     def symmetrize(self, ee):
@@ -91,17 +89,6 @@ class BSSSConnectedComponents(Algorithm):
 
         sc = graph.spark.sparkContext
 
-        shouldCheckpoint = self.checkpointInterval > 0
-        if shouldCheckpoint:
-            checkpointDir = sc.getCheckpointDir()
-            if checkpointDir is None:
-                raise Exception("Checkpoint directory is not set. Please set it first using sc.setCheckpointDir().")
-            else:
-                checkpointDir += f"{self.CHECKPOINT_NAME_PREFIX}-{runId}"
-                print(f"{logPrefix} Using {checkpointDir} for checkpointing with interval {self.checkpointInterval}.")
-        else:
-            print(f"{logPrefix} Checkpointing is disabled because checkpoint interval is {self.checkpointInterval}.")
-
         print(f"{logPrefix} Preparing the graph for connected component computation ...")
         g = self.prepare(graph)
         vv = g.vertices
@@ -133,11 +120,6 @@ class BSSSConnectedComponents(Algorithm):
                 col(SRC) != col(DST))
             # connect self to the min neighbor
             ee = ee.union(minNbrs2.select(col(self.MIN_NBR).alias(SRC), col(SRC).alias(DST))).distinct()
-
-            # checkpointing
-            if shouldCheckpoint and (iteration % self.checkpointInterval == 0):
-                # TODO check whether checkpoint is equivalent to prev parquet method
-                ee.checkpoint()
 
             ee.persist(self.intermediateStorageLevel)
 

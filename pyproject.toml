@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspark-graph"
-version = "0.0.5"
+version = "0.0.7"
 authors = [
   { name="Joshua", email="author@example.com" },
 ]
 description = "Pure pyspark implementation of graph algorithms"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",

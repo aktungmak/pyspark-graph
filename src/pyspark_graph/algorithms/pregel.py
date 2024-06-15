@@ -29,14 +29,11 @@ class Pregel(Algorithm):
                  msg_to_dst: Column = None,
                  update_expr: Column = None,
                  comparison: typing.Callable = ne_null_safe,
-                 max_iterations: int = 10,
-                 checkpoint_interval: int = 2):
+                 max_iterations: int = 10):
         if msg_to_src is None and msg_to_dst is None:
             raise ValueError("need at least one of msg_to_src or msg_to_dst")
         if max_iterations <= 0:
             raise ValueError("max_iterations must be greater than 0")
-        if checkpoint_interval <= 0:
-            raise ValueError("checkpoint_interval must be greater than 0")
         self.initial_state = initial_state
         self.agg_expr = agg_expr
         self.msg_to_src = msg_to_src
@@ -44,7 +41,6 @@ class Pregel(Algorithm):
         self.update_expr = col(self.MSG) if update_expr is None else update_expr
         self.comparison = comparison
         self.max_iterations = max_iterations
-        self.checkpoint_interval = checkpoint_interval
 
     def run(self, g: Graph) -> DataFrame:
         state = g.vertices.withColumns({self.STATE: self.initial_state,
@@ -75,9 +71,6 @@ class Pregel(Algorithm):
             changed = updated.filter(self.comparison(col(self.STATE), col(self.OLD_STATE)))
             if changed.isEmpty():
                 break
-
-            if g.checkpointing and self.checkpoint_interval > 0 and i % self.checkpoint_interval == 0:
-                state = state.checkpoint()
 
         return state
 
