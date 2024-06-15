@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyspark-graph"
+version = "0.0.5"
+authors = [
+  { name="Joshua", email="author@example.com" },
+]
+description = "Pure pyspark implementation of graph algorithms"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+]
+keywords = ["spark", "pyspark", "graph", "graphx", "graphframes"]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = "requirements.txt"}
+
+[project.urls]
+Homepage = "https://github.com/aktungmak/pyspark-graph"
+Issues = "https://github.com/aktungmak/pyspark-graph/issues"
