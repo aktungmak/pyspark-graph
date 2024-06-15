@@ -1,7 +1,7 @@
 from pyspark.sql import DataFrame
 
-from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.graph import Graph, SRC, DST, ID
+from src.pyspark_graph.algorithms import Algorithm
+from src.pyspark_graph.graph import Graph, ID
 
 
 class ShortestPaths(Algorithm):

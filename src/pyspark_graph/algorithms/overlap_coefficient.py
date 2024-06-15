@@ -2,8 +2,8 @@ from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, size, array_intersect, least
 from pyspark.sql.types import LongType, StructField, StructType
 
-from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.graph import Graph, ID, ADJ
+from src.pyspark_graph.algorithms import Algorithm
+from src.pyspark_graph.graph import Graph, ID, ADJ
 
 
 class OverlapCoefficient(Algorithm):

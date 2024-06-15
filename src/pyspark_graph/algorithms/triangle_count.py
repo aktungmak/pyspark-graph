@@ -1,6 +1,6 @@
-from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.graph import Graph
-from pyspark_graph.util import match_structure, order_edges
+from src.pyspark_graph.algorithms import Algorithm
+from src.pyspark_graph.graph import Graph
+from src.pyspark_graph.util import match_structure, order_edges
 
 
 class TriangleCount(Algorithm):

@@ -1,7 +1,6 @@
 from pyspark.sql.functions import col, max as _max, greatest
 
-from pyspark_graph.algorithms import pregel
-from pyspark_graph.graph import ID
+from src.pyspark_graph import ID
 from tests import samples
 from tests.spark_test import SparkTest
 

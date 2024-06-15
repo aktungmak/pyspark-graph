@@ -1,9 +1,9 @@
 from pyspark.sql import Column
 from pyspark.sql.functions import col, mode
 
-from pyspark_graph.algorithms import Algorithm
-from pyspark_graph.algorithms.pregel import Pregel
-from pyspark_graph.graph import Graph, ID, OLD_ID
+from src.pyspark_graph.algorithms import Algorithm
+from src.pyspark_graph.algorithms.pregel import Pregel
+from src.pyspark_graph.graph import Graph, ID
 
 LABEL = "label"
 

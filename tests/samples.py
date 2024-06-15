@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 
-from pyspark_graph.graph import Graph, ID, SRC, DST
+from src.pyspark_graph import Graph, ID, SRC, DST
 
 
 def sample1(spark: SparkSession):
