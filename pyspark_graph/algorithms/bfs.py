@@ -2,8 +2,8 @@ from pyspark.sql import Column, DataFrame
 from pyspark.sql.functions import col, array, array_contains, array_append
 from pyspark.sql.types import StructType, StructField, LongType, ArrayType
 
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.graph import Graph, SRC, DST, ID, EDGE_ID
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.graph import Graph, SRC, DST, ID, EDGE_ID
 
 START = "start"
 END = "end"

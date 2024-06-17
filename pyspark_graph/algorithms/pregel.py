@@ -3,9 +3,9 @@ import typing
 from pyspark.sql import Column, DataFrame
 from pyspark.sql.functions import col, lit
 
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.graph import Graph, DST, SRC, ID
-from src.pyspark_graph.util import ne_null_safe, multiple_union
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.graph import Graph, DST, SRC, ID
+from pyspark_graph.util import ne_null_safe, multiple_union
 
 
 class Pregel(Algorithm):

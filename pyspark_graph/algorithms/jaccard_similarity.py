@@ -1,8 +1,8 @@
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, size, array_intersect, array_union
 
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.graph import Graph, ID, ADJ
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.graph import Graph, ID, ADJ
 
 
 class JaccardSimilarity(Algorithm):

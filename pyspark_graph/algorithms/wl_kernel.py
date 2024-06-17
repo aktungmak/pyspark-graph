@@ -1,8 +1,8 @@
 from pyspark.sql.functions import sha1, col, array_join, collect_list
 
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.algorithms.pregel import Pregel
-from src.pyspark_graph.graph import Graph, ID, DEGREE
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.algorithms.pregel import Pregel
+from pyspark_graph.graph import Graph, ID, DEGREE
 
 
 class WLKernel(Algorithm):

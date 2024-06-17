@@ -3,8 +3,8 @@ from typing import Optional
 from pyspark.sql import Column, DataFrame
 from pyspark.sql.functions import col
 
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.graph import Graph, ID
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.graph import Graph, ID
 
 MSG = "message"
 SRC_VERTEX_PREFIX = "src_vertex_"

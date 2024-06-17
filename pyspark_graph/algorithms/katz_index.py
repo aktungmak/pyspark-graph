@@ -1,10 +1,10 @@
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import max as _max
 
-from src.pyspark_graph import matrix
-from src.pyspark_graph.algorithms import Algorithm
-from src.pyspark_graph.graph import Graph, SRC, DST
-from src.pyspark_graph import graph_to_adjacency_matrix
+from pyspark_graph import matrix
+from pyspark_graph.algorithms import Algorithm
+from pyspark_graph.graph import Graph, SRC, DST
+from pyspark_graph import graph_to_adjacency_matrix
 
 
 class KatzIndex(Algorithm):

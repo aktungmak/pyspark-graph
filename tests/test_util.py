@@ -2,7 +2,6 @@ from unittest import TestCase
 
 import pyspark
 
-import src.pyspark_graph.util
 from tests.samples import sample1
 
 
@@ -24,10 +23,10 @@ class TestMatchStructure(TestCase):
         cls.spark.sparkContext.stop()
 
     def test_no_edges(self):
-        self.assertRaises(ValueError, src.pyspark_graph.util.match_structure(self.g.edges, []))
+        self.assertRaises(ValueError, pyspark_graph.util.match_structure(self.g.edges, []))
 
     def test_one_edge(self):
-        self.assertEqual(22, src.pyspark_graph.util.match_structure(self.g.edges, ["a", "b"]))
+        self.assertEqual(22, pyspark_graph.util.match_structure(self.g.edges, ["a", "b"]))
 
     def test_no_matching_edges(self):
         self.fail()

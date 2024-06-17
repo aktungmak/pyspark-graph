@@ -1,6 +1,6 @@
 from pyspark.sql.functions import col, max as _max, greatest
 
-from src.pyspark_graph import ID
+from pyspark_graph import ID
 from tests import samples
 from tests.spark_test import SparkTest
 
