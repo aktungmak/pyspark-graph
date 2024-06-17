@@ -36,23 +36,23 @@ class ConnectedComponents(Algorithm):
         return p.run(g).select(col(ID), col(Pregel.STATE).alias(COMPONENT))
 
 
-class BSSSConnectedComponents(Algorithm):
+class AlternatingConnectedComponents(Algorithm):
     ORIG_ID = "orig_id"
     MIN_NBR = "min_nbr"
     CNT = "cnt"
 
-    def __init__(self, broadcastThreshold: int = 1000000,
-                 intermediateStorageLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK):
+    def __init__(self, broadcastThreshold: int = 1000000):
         self.broadcastThreshold = broadcastThreshold
-        self.intermediateStorageLevel = intermediateStorageLevel
 
-    def symmetrize(self, ee):
+    @staticmethod
+    def symmetrize(edges: DataFrame) -> DataFrame:
         """Add in extra edges to make the directed graph symmetric (i.e. undirected)"""
         EDGE = "_edge"
-        return (ee.select(explode(array(
-            struct(col("src"), col("dst")),
-            struct(col("dst").alias("src"), col("src").alias("dst")))).alias(EDGE))
-                .select(col(f"{EDGE}.src").alias("src"), col(f"{EDGE}.dst").alias("dst")))
+        return (edges.select(
+            explode(array(
+                struct(col("src"), col("dst")),
+                struct(col("dst").alias("src"), col("src").alias("dst")))).alias(EDGE))
+            .select(col(f"{EDGE}.src").alias("src"), col(f"{EDGE}.dst").alias("dst")))
 
     def prepare(self, g: Graph):
         vertices = g.vertices.select(col(ID)).distinct()
