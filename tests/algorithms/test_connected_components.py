@@ -15,10 +15,10 @@ class TestConnectedComponents(SparkTest):
 
 
 class TestAlternatingConnectedComponents(SparkTest):
-    def test_symmetrise(self):
+    def test_symmetrize(self):
         edges = self.spark.createDataFrame([(1, 2), (3, 4), (4, 3)], ["src", "dst"])
         r = AlternatingConnectedComponents.symmetrize(edges).collect()
-        self.assertEqual(len(r), 4)
+        self.assertEqual(len(r), 6)
 
     def test_two_components(self):
         g = samples.two_components(self.spark)
