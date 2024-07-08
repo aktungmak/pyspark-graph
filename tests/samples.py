@@ -28,8 +28,8 @@ def two_components(spark: SparkSession):
 
 
 def labelled(spark: SparkSession):
-    v = spark.createDataFrame([(x, i) for i, x in enumerate("abcdef")], [ID, "label"])
+    v = spark.createDataFrame([(i, x) for i, x in enumerate("abcdef")], [ID, "label"])
     e = spark.createDataFrame(
-        [("a", "b"), ("b", "c"), ("c", "a"), ("d", "e"), ("d", "f")],
+        [(0, 1), (1, 2), (2, 0), (3, 4), (3, 5)],
         [SRC, DST])
     return Graph(v, e)

@@ -1,5 +1,6 @@
 from pyspark.sql import Column
 from pyspark.sql.functions import col, mode
+from pyspark.sql.types import StructType, StructField, LongType
 
 from pyspark_graph.algorithms import Algorithm
 from pyspark_graph.algorithms.pregel import Pregel
