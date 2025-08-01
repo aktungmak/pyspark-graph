@@ -14,21 +14,25 @@ This package is available on PyPI, to install it simply run:
 pip install pyspark-graph
 ```
 
-### Supported algorithms
-The following table compares the features of pyspark-graph with GraphFrames and GraphX. The goal is to add the missing features and continue to add additional algorithms in future.
+### Supported algorithms using the DataFrame API
+Another goal of this project is to provide graph algorithms implemented using the DataFrame API
+to improve compatibility with features like Spark Connect.
+
+The following table compares the features of pyspark-graph with GraphFrames and GraphX, showing which
+algorithms are available through the DataFrame API.
 
 | Name                         | GraphX | GraphFrames | pyspark-graph |
 |------------------------------|--------|-------------|---------------|
-| AggregateMessages            | ✅      | ✅           | ✅             |
-| BFS                          | ✅      | ✅           | ✅             |
-| ConnectedComponents          | ✅      | ✅           | ✅             |
-| LabelPropagation             | ✅      | ❌           | ✅             |
-| PageRank                     | ✅      | ❌           | ❌             |
-| ParallelPersonalizedPageRank | ✅      | ❌           | ❌             |
-| Pregel                       | ✅      | ✅           | ✅             |
-| SVDPlusPlus                  | ✅      | ❌           | ❌             |
-| ShortestPaths                | ✅      | ❌           | ❌             |
-| StronglyConnectedComponents  | ✅      | ❌           | ❌             |
-| TriangleCount                | ✅      | ✅           | ✅             |
-| JaccardSimilarity            | ❌      | ❌           | ✅             |
-| OverlapCoefficient           | ❌      | ❌           | ✅             |
+| AggregateMessages            | ❌     | ✅          | ✅            |
+| BFS                          | ❌     | ✅          | ✅            |
+| ConnectedComponents          | ❌     | ✅          | ✅            |
+| LabelPropagation             | ❌     | ❌          | ✅            |
+| PageRank                     | ❌     | ❌          | ❌            |
+| ParallelPersonalizedPageRank | ❌     | ❌          | ❌            |
+| Pregel                       | ❌     | ✅          | ✅            |
+| SVDPlusPlus                  | ❌     | ❌          | ❌            |
+| ShortestPaths                | ❌     | ❌          | ❌            |
+| StronglyConnectedComponents  | ❌     | ❌          | ❌            |
+| TriangleCount                | ❌     | ✅          | ✅            |
+| JaccardSimilarity            | ❌     | ❌          | ✅            |
+| OverlapCoefficient           | ❌     | ❌          | ✅            |
